@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>AI Survivor V4</title>
+<title>AI Survivor</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#11151d;touch-action:none;font-family:system-ui,sans-serif}
@@ -200,7 +200,7 @@ function showLevelUp(){
  for(const o of opts){
   const b=document.createElement('button');b.className='choice';
   b.innerHTML=`<span class="stars">${stars(o.stars)}</span><span class="tag">${o.kind==='weapon'?'WEAPON':'SUPPORT'}</span>${o.title}<small>${o.desc}</small>`;
-  b.onclick=()=>{applyChoice(o.id);document.getElementById('levelup').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};
+  b.onclick=()=>{applyChoice(o.id);document.getElementById('levelup').style.display='none';paused=false;last=performance.now();if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop)};
   box.appendChild(b)
  }
  document.getElementById('levelup').style.display='flex';
@@ -442,27 +442,52 @@ ctx.fillStyle='#20242a';ctx.beginPath();ctx.arc(0,0,br*.16,0,Math.PI*2);ctx.fill
  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/.4);ctx.fillStyle='#f2c14e';ctx.fillRect(p.x-2,p.y-2,4,4);}ctx.globalAlpha=1;for(const t of texts){ctx.globalAlpha=Math.max(0,1-t.age/.8);ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(t.n,t.x,t.y);}ctx.globalAlpha=1;drawPlayer();ctx.restore();
 }
 
-function loop(t){if(over||paused)return;const dt=Math.min((t-last)/1000,.033);last=t;try{update(dt);draw()}catch(err){console.error('Game loop error:',err)}if(!over&&!paused)requestAnimationFrame(loop)}
+let rafId=0;
+let fatalError=false;
+function showFatalError(err){
+  if(fatalError)return;
+  fatalError=true;
+  console.error('AI Survivor runtime error:',err);
+  paused=true;
+  const box=document.getElementById('gameover');
+  document.getElementById('endTitle').textContent='게임 실행 오류';
+  document.getElementById('result').textContent='게임 초기화 중 오류가 발생했습니다. 페이지를 새로고침해 주세요.';
+  document.getElementById('damageResult').textContent='오류: '+(err&&err.message?err.message:String(err));
+  box.classList.remove('win');
+  box.style.display='flex';
+}
+function loop(t){
+  if(over||paused||fatalError)return;
+  try{
+    const dt=Math.min(Math.max((t-last)/1000,0),.033);
+    last=t;
+    update(dt);
+    draw();
+    if(!over&&!paused&&!fatalError)rafId=requestAnimationFrame(loop);
+  }catch(err){showFatalError(err);}
+}
 function joyMove(e){let x=e.clientX-joy.bx,y=e.clientY-joy.by,d=Math.hypot(x,y),m=42;if(d>m){x=x/d*m;y=y/d*m}joy.x=x/m;joy.y=y/m;knob.style.transform=`translate(${x}px,${y}px)`}
 function begin(e){if(paused||over||e.target.closest('button,.overlay'))return;joy.on=true;joy.id=e.pointerId;joy.bx=e.clientX;joy.by=e.clientY;stick.style.left=e.clientX+'px';stick.style.top=e.clientY+'px';stick.style.display='block';joyMove(e)}
 function end(e){if(!joy.on||e.pointerId!==joy.id)return;joy.on=false;joy.x=joy.y=0;stick.style.display='none';knob.style.transform='translate(0,0)'}
 c.addEventListener('pointerdown',begin);c.addEventListener('pointermove',e=>joy.on&&e.pointerId===joy.id&&joyMove(e));c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);
 function startGame(){
   if(gameStarted)return;
-  document.getElementById('gameover').style.display='none';
-  gameStarted=true;
-  reset();
-  last=performance.now();
-  requestAnimationFrame(loop);
-}
-document.getElementById('restart').onclick=()=>{
+  if(rafId)cancelAnimationFrame(rafId);
+  fatalError=false;
   document.getElementById('gameover').classList.remove('win');
   document.getElementById('gameover').style.display='none';
+  reset();
+  gameStarted=true;
+  last=performance.now();
+  rafId=requestAnimationFrame(loop);
+}
+document.getElementById('restart').onclick=()=>{
+  if(rafId)cancelAnimationFrame(rafId);
   gameStarted=false;
   startGame();
 };
-document.getElementById('closeChest').onclick=()=>{chestPaused=false;document.getElementById('chestReward').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};
-document.getElementById('pauseBtn').onclick=()=>{if(over||document.getElementById('levelup').style.display==='flex'||chestPaused)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'Ⅱ';if(!paused){last=performance.now();requestAnimationFrame(loop)}};
+document.getElementById('closeChest').onclick=()=>{chestPaused=false;document.getElementById('chestReward').style.display='none';paused=false;last=performance.now();if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop)};
+document.getElementById('pauseBtn').onclick=()=>{if(over||document.getElementById('levelup').style.display==='flex'||chestPaused)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'Ⅱ';if(!paused){last=performance.now();if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop)}};
 startGame();
 </script>
 </body>
