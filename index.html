@@ -153,8 +153,9 @@ function spawnEnemy(){
 }
 function boss(kind){
  const names=['Crimson Brute','Azure Warden','Violet Reaper','Golden Titan','Final Overlord'];
+ const k=Math.min(kind,4);
  const a=Math.random()*6.28,d=(k===4?Math.max(70,Math.min(W,H)/2-48):Math.max(W,H)/2+100);
- const k=Math.min(kind,4),hp=(k===4?12000:200*(k+1));
+ const hp=(k===4?12000:200*(k+1));
  enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5,finalBoss:k===4});
 }
 function fireGun(){
