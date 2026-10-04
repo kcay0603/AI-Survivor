@@ -150,12 +150,13 @@ function spawnEnemy(){
  const a=Math.random()*Math.PI*2,d=Math.max(W,H)/2+55;const t=chooseType();
  enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:t.r,hp:S.monsterHp*t.hp,max:S.monsterHp*t.hp,speed:t.speed+Math.min(35,level*1.5),type:t.name,contact:S.contact*t.damage, xp:t.xp,phase:Math.random()*6.28,boss:false});
 }
-function boss(kind){
+function boss(kind,isFinal=false){
  const names=['Crimson Brute','Azure Warden','Violet Reaper','Golden Titan','Final Overlord'];
+ const hpByBoss=[1000,2500,4000,6000,8000];
  const k=Math.min(kind,4);
  const a=Math.random()*6.28,d=(k===4?Math.max(70,Math.min(W,H)/2-48):Math.max(W,H)/2+100);
- const hp=(k===4?12000:200*(k+1));
- enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5,finalBoss:k===4});
+ const hp=isFinal?12000:hpByBoss[k];
+ enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5,finalBoss:isFinal});
 }
 function fireGun(){
  const w=weapons.kunai;
@@ -351,7 +352,7 @@ function update(dt){
  if(time<540)time+=dt;
  if(time>540)time=540;
  healTimer-=dt;if(healTimer<=0){healTimer=5;if(supports.drink.lv)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*.01*supports.drink.lv);}
- if(time>=540){time=540;if(!enemies.some(e=>e.boss&&e.bossIndex===4))boss(4);}
+ if(time>=540){time=540;if(!enemies.some(e=>e.boss&&e.finalBoss))boss(4,true);}
  else if(time>=nextBoss){boss(Math.floor(nextBoss/90)-1);nextBoss+=90;}
  spawnTimer-=dt;if(spawnTimer<=0){const spawnCount=Math.min(5,1+Math.floor(time/120));for(let i=0;i<spawnCount;i++)if(enemies.length<80)spawnEnemy();spawnTimer=Math.max(.24,.82-time*.00055);}
  shotTimer-=dt;
