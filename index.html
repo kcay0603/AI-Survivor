@@ -223,7 +223,7 @@ function kill(e,source='normal'){
  if(e.dead||e.hp>0)return;
  e.dead=true;
  score+=e.boss?250:10;killCount++;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});
- if(e.boss){gems.push({x:e.x+8,y:e.y,r:7,xp:e.xp});drop(e.x-14,e.y,'bomb');drop(e.x+14,e.y,'magnet')}
+ if(e.boss){gems.push({x:e.x+8,y:e.y,r:7,xp:e.xp});drop(e.x-22,e.y,'bomb');drop(e.x+22,e.y,'magnet');drop(e.x,e.y-20,'chest')}
  else if(Math.random()<.05)drop(e.x,e.y,['bomb','magnet','heal'][Math.floor(Math.random()*3)]);
  burst(e.x,e.y,e.boss?25:8);
 }
@@ -231,13 +231,13 @@ function collectDrop(d){
  if(d.type==='bomb'){for(const e of enemies)if(e.hp>0){if(e.boss){e.hp=Math.max(0,e.hp-e.max*.05);addText(e.x,e.y-e.r,'-'+Math.ceil(e.max*.05));}else{e.hp=0;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});kill(e,'bomb')}}}
  if(d.type==='magnet'){for(const g of gems)g.boost=5000}
  if(d.type==='heal')player.hp=Math.min(player.maxHp,player.hp+15);
- if(d.type==='chest')openChestReward();
+ if(d.type==='chest'){d.r=0;openChestReward();}
 }
 function openChestReward(){
  const candidates=[];
  for(const [id,w] of Object.entries(weapons))if(w.lv<w.max)candidates.push(id);
  for(const [id,s] of Object.entries(supports))if(s.lv<s.max)candidates.push(id);
- if(!candidates.length)return;
+ if(!candidates.length){chestPaused=false;paused=false;document.getElementById('chestReward').style.display='none';last=performance.now();requestAnimationFrame(loop);return;}
  const count=[1,3,5][Math.floor(Math.random()*3)];
  const pool=[...candidates].sort(()=>Math.random()-.5).slice(0,Math.min(count,candidates.length));
  const names=[];
@@ -396,7 +396,7 @@ ctx.fillStyle='#20242a';ctx.beginPath();ctx.arc(0,0,br*.16,0,Math.PI*2);ctx.fill
  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/.4);ctx.fillStyle='#f2c14e';ctx.fillRect(p.x-2,p.y-2,4,4);}ctx.globalAlpha=1;for(const t of texts){ctx.globalAlpha=Math.max(0,1-t.age/.8);ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(t.n,t.x,t.y);}ctx.globalAlpha=1;drawPlayer();ctx.restore();
 }
 
-function loop(t){if(over||paused)return;const dt=Math.min((t-last)/1000,.033);last=t;update(dt);draw();requestAnimationFrame(loop)}
+function loop(t){if(over||paused)return;const dt=Math.min((t-last)/1000,.033);last=t;try{update(dt);draw()}catch(err){console.error('Game loop error:',err)}if(!over&&!paused)requestAnimationFrame(loop)}
 function joyMove(e){let x=e.clientX-joy.bx,y=e.clientY-joy.by,d=Math.hypot(x,y),m=42;if(d>m){x=x/d*m;y=y/d*m}joy.x=x/m;joy.y=y/m;knob.style.transform=`translate(${x}px,${y}px)`}
 function begin(e){if(paused||over||e.target.closest('button,.overlay'))return;joy.on=true;joy.id=e.pointerId;joy.bx=e.clientX;joy.by=e.clientY;stick.style.left=e.clientX+'px';stick.style.top=e.clientY+'px';stick.style.display='block';joyMove(e)}
 function end(e){if(!joy.on||e.pointerId!==joy.id)return;joy.on=false;joy.x=joy.y=0;stick.style.display='none';knob.style.transform='translate(0,0)'}
