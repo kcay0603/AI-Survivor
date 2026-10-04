@@ -52,7 +52,7 @@ button{font-size:16px;font-weight:900;padding:11px 20px;border:0;border-radius:1
 
 <div id="levelup" class="overlay"><h2>LEVEL UP!</h2><p class="sub">무기 또는 보조무기를 선택하세요.</p><div id="choices"></div></div>
 
-<div id="mainMenu" class="overlay" style="display:flex"><h1>AI SURVIVOR</h1><p>9분 동안 살아남아 최종 보스를 처치하세요.</p><button id="startBtn">게임 시작</button></div>
+<div id="mainMenu" class="overlay" style="display:flex"><h1>AI SURVIVOR</h1><p>9분 동안 살아남아 최종 보스를 처치하세요.</p><button id="startBtn" type="button">게임 시작</button></div>
 <div id="gameover" class="overlay"><h1 id="endTitle">GAME OVER</h1><p id="result"></p><div id="damageResult" style="margin:10px 0 18px;min-width:250px;max-width:340px;padding:12px;border-radius:12px;background:#252b36;border:1px solid #fff3;text-align:left"></div><button id="restart">메인 화면</button></div>
 
 <script>
@@ -449,10 +449,29 @@ function begin(e){if(paused||over||e.target.closest('button,.overlay'))return;jo
 function end(e){if(!joy.on||e.pointerId!==joy.id)return;joy.on=false;joy.x=joy.y=0;stick.style.display='none';knob.style.transform='translate(0,0)'}
 c.addEventListener('pointerdown',begin);c.addEventListener('pointermove',e=>joy.on&&e.pointerId===joy.id&&joyMove(e));c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);
 let startLock=false;
-function startGame(e){if(e)e.preventDefault();if(startLock||gameStarted)return;startLock=true;document.getElementById('mainMenu').style.display='none';document.getElementById('gameover').style.display='none';gameStarted=true;reset();last=performance.now();requestAnimationFrame(loop);setTimeout(()=>startLock=false,0)}
+function startGame(e){
+ if(e){e.preventDefault();e.stopPropagation();}
+ if(startLock||gameStarted)return;
+ startLock=true;
+ try{
+  reset();
+  document.getElementById('mainMenu').style.display='none';
+  document.getElementById('gameover').style.display='none';
+  gameStarted=true;
+  last=performance.now();
+  requestAnimationFrame(loop);
+ }catch(err){
+  console.error('START ERROR:',err);
+  gameStarted=false;
+  document.getElementById('mainMenu').style.display='flex';
+  alert('게임 시작 중 오류가 발생했습니다. 최신 index.html 파일로 다시 교체해주세요.');
+ }finally{
+  setTimeout(()=>startLock=false,100);
+ }
+}
 const startButton=document.getElementById('startBtn');
-startButton.addEventListener('click',startGame);
-startButton.addEventListener('pointerup',startGame);
+startButton.addEventListener('pointerdown',startGame,{passive:false});
+startButton.addEventListener('click',e=>{if(!gameStarted)startGame(e);},{passive:false});
 document.getElementById('restart').onclick=()=>{document.getElementById('gameover').classList.remove('win');document.getElementById('gameover').style.display='none';document.getElementById('mainMenu').style.display='flex';gameStarted=false};
 document.getElementById('closeChest').onclick=()=>{chestPaused=false;document.getElementById('chestReward').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};
 document.getElementById('pauseBtn').onclick=()=>{if(over||document.getElementById('levelup').style.display==='flex'||chestPaused)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'Ⅱ';if(!paused){last=performance.now();requestAnimationFrame(loop)}};
