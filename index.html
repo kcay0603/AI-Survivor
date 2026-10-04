@@ -332,7 +332,7 @@ function processLightning(dt){
 }
 
 function nearestEnemy(maxRange=Infinity){let t=null,b=Infinity;const r=maxRange===Infinity?Math.max(W,H):maxRange;for(const e of queryEnemies(player.x,player.y,r)){const dx=e.x-player.x,dy=e.y-player.y,d=dx*dx+dy*dy;if(d<=maxRange*maxRange&&d<b){b=d;t=e}}return t}
-function fireRocket(w,index=0,total=1){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const base=Math.atan2(t.y-player.y,t.x-player.x);const spread=total>1?0.16:0;const a=base+(index-(total-1)/2)*spread;const spd=250*(1+stats.projectileSpeedPct),giant=w.lv>=5;shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:(giant?14:6)*((1+stats.weaponSizePct)),life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct)*(w.lv>=3&&w.lv<5?1.1:1),rocket:true,giant});}
+function fireRocket(w,index=0,total=1){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const base=Math.atan2(t.y-player.y,t.x-player.x);const spread=total>1?0.16:0;const a=base+(index-(total-1)/2)*spread;const spd=250*(1+stats.projectileSpeedPct),giant=w.lv>=5;shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:(giant?14:6)*((1+stats.weaponSizePct)),life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct)*(w.lv>=3&&w.lv<5?1.1:1),rocket:true,giant,hit:new Set()});}
 function rocketExplosion(s){const r=(s.giant?58:40)*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);burst(s.x,s.y,s.giant?28:16);for(const e of queryEnemies(s.x,s.y,r+24))if(e.hp>0&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){dealWeaponDamage(e,s.damage,'rocket','rocket');}}
 function lightning(){startLightningSequence();}
 
@@ -391,8 +391,9 @@ function update(dt){
      if(sh.x<left||sh.x>right){sh.x=Math.max(left,Math.min(right,sh.x));sh.vx*=-1;}
      if(sh.y<top||sh.y>bottom){sh.y=Math.max(top,Math.min(bottom,sh.y));sh.vy*=-1;}
    }
-   for(const e of queryEnemies(sh.x,sh.y,sh.r+24)){const hitNow=Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r;if(hitNow){if(sh.homing){if(!sh.hitCooldowns)sh.hitCooldowns=new WeakMap();let cd=sh.hitCooldowns.get(e)||0;if(cd<=0){dealWeaponDamage(e,sh.damage,'drill','drill');sh.hitCooldowns.set(e,.1);}else sh.hitCooldowns.set(e,Math.max(0,cd-dt));}else if(!sh.hit.has(e)){sh.hit.add(e);dealWeaponDamage(e,sh.damage,'drill','drill');}}else if(sh.homing&&sh.hitCooldowns){let cd=sh.hitCooldowns.get(e);if(cd!=null)sh.hitCooldowns.set(e,Math.max(0,cd-dt));}}
+   for(const e of queryEnemies(sh.x,sh.y,sh.r+24)){const hitNow=Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r;if(hitNow){if(sh.homing){if(!sh.hitCooldowns)sh.hitCooldowns=new WeakMap();let cd=sh.hitCooldowns.get(e)||0;if(cd<=0){dealWeaponDamage(e,sh.damage,'drill','drill');sh.hitCooldowns.set(e,.1);}else sh.hitCooldowns.set(e,Math.max(0,cd-dt));}else {if(!sh.hit)sh.hit=new Set(); if(!sh.hit.has(e)){sh.hit.add(e);dealWeaponDamage(e,sh.damage,'drill','drill');}}}else if(sh.homing&&sh.hitCooldowns){let cd=sh.hitCooldowns.get(e);if(cd!=null)sh.hitCooldowns.set(e,Math.max(0,cd-dt));}}
   }else{
+   if(!sh.hit)sh.hit=new Set();
    for(const e of queryEnemies(sh.x,sh.y,sh.r+24))if(e.hp>0&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r&&!sh.hit.has(e)){
      sh.hit.add(e);
      if(sh.rocket){rocketExplosion(sh);sh.life=0;break;}
