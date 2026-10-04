@@ -375,7 +375,6 @@ function update(dt){
      for(let ox=-1;ox<=1;ox++)for(let oy=-1;oy<=1;oy++){const list=enemyGrid.get(gridKey(gx+ox,gy+oy));if(!list)continue;for(const o of list){if(o===e||o.hp<=0||o.dead)continue;const dx=e.x-o.x,dy=e.y-o.y,od2=dx*dx+dy*dy,minD=e.r+o.r+2;if(od2<minD*minD){const od=Math.sqrt(od2)||1,p=(minD-od)/od*.25;e.x+=dx*p;e.y+=dy*p;}}}}
    }
    rebuildEnemyGrid();
- }
  for(const a of areaWarnings){a.t-=dt;if(a.t<=0&&!a.done){if(a.lightning){for(const e of queryEnemies(a.x,a.y,a.r+24))if(e.hp>0&&!e.dead&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'lightning','lightning');}}else if(a.ranged){shots.push({x:a.x,y:a.y,vx:0,vy:0,r:a.r*.55,life:.35,damage:a.damage,bossBlast:true,hit:new Set()});}else if(a.charge&&a.boss&&!a.boss.dead){a.boss.chargeX=a.dx;a.boss.chargeY=a.dy;a.boss.chargeT=.42;}else if(Math.hypot(player.x-a.x,player.y-a.y)<a.r+player.r&&player.inv<=0){player.hp-=a.damage*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(a.damage));}burst(a.x,a.y,a.lightning?18:14);a.done=true;}}
  areaWarnings=areaWarnings.filter(a=>!a.done);
  for(const sh of shots){
@@ -401,6 +400,7 @@ function update(dt){
      if(sh.basicGun&&sh.pierce>0){sh.pierce--;continue;}
      sh.life=0;break;
    }}
+  }
  for(const a of areas){a.life-=dt;a.tick-=dt;if(a.tick<=0){a.tick=.4;for(const e of queryEnemies(a.x,a.y,a.r+24))if(e.hp>0&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'fire','fire');}}}
  {const left=player.x-W/2-80,right=player.x+W/2+80,top=player.y-H/2-80,bottom=player.y+H/2+80;areas=areas.filter(a=>a.life>0&&a.x>=left&&a.x<=right&&a.y>=top&&a.y<=bottom);}
  weaponUpdate(dt);
