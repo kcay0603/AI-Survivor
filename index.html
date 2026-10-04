@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>AI Survivor V3.4</title>
+<title>AI Survivor V4</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#11151d;touch-action:none;font-family:system-ui,sans-serif}
@@ -26,6 +26,11 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 button{font-size:16px;font-weight:900;padding:11px 20px;border:0;border-radius:10px;background:#f2c14e;color:#111}
 #gameover{z-index:30}.win{background:#07110de8}
 #weaponList{font-size:11px;line-height:1.5;margin-top:5px;opacity:.85}
+#supportList{font-size:10px;line-height:1.35;max-width:240px;opacity:.78;margin-top:2px}
+#levelup .sub{margin:0 0 8px;font-size:12px;opacity:.75}
+.choice{position:relative;min-height:112px}
+.choice .stars{display:block;text-align:center;font-size:18px;letter-spacing:1px;line-height:20px;margin-bottom:3px;color:#ffd84d}
+.choice .tag{display:inline-block;font-size:9px;padding:2px 5px;border-radius:6px;background:#151a22;opacity:.8;margin-bottom:3px}
 </style>
 </head>
 <body>
@@ -34,12 +39,12 @@ button{font-size:16px;font-weight:900;padding:11px 20px;border:0;border-radius:1
   <div id="top"><span>LV <b id="lv">1</b></span><span>💎 <b id="gems">0</b></span><span>점수 <b id="score">0</b></span><span>⏱ <b id="time">0:00</b></span></div>
   <div id="bar"><div id="hp"></div></div><div id="hpText">100 / 100</div>
   <div id="xpbar"><div id="xp"></div></div>
-  <div id="weaponList"></div>
+  <div id="weaponList"></div><div id="supportList"></div>
   <div id="hint">화면 어디든 드래그 · 자동 공격</div>
 </div>
 <div id="stick"><div id="knob"></div></div>
 
-<div id="levelup" class="overlay"><h2>LEVEL UP!</h2><p>무기 또는 능력을 선택하세요.</p><div id="choices"></div></div>
+<div id="levelup" class="overlay"><h2>LEVEL UP!</h2><p class="sub">무기 또는 보조무기를 선택하세요.</p><div id="choices"></div></div>
 
 <div id="gameover" class="overlay"><h1 id="endTitle">GAME OVER</h1><p id="result"></p><button id="restart">다시 시작</button></div>
 
@@ -49,16 +54,30 @@ let W,H,DPR;
 function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;c.style.width=W+'px';c.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',resize);resize();
 
 const S={maxHp:100,damage:12,monsterHp:20,contact:10,xpBase:40};
-let player,enemies,shots,gems,drops,particles,texts,areaWarnings,score,level,xp,xpNeed,time,spawnTimer,shotTimer,nextBoss,paused,over,won,last,walkTime,killCount;
+let player,enemies,shots,gems,drops,particles,texts,areaWarnings,areas,score,level,xp,xpNeed,time,spawnTimer,shotTimer,nextBoss,paused,over,won,last,walkTime,killCount;
 const joy={on:false,id:null,bx:0,by:0,x:0,y:0};
 const weapons={
- blades:{name:'회전하는 칼날',lv:0,max:5,evo:false,count:0,damage:22,rate:.28,range:62,size:1,cool:0,hitTimer:0},
- missile:{name:'폭발 미사일',lv:0,max:5,evo:false,count:0,damage:30,rate:1.25,range:300,size:1,cool:0},
- sonic:{name:'음파 공격',lv:0,max:5,evo:false,count:0,damage:26,rate:2.1,range:85,size:1,cool:0},
- lightning:{name:'번개 공격',lv:0,max:5,evo:false,count:0,damage:42,rate:2.5,range:320,size:1,cool:0},
+ blades:{name:'수호자',lv:0,max:5,evo:false,count:0,damage:22,range:100,duration:5,cooldown:3,cool:0,phase:0},
+ lightning:{name:'번개 발사기',lv:0,max:5,evo:false,count:0,damage:42,range:300,cooldown:4,cool:0},
+ rocket:{name:'로켓',lv:0,max:5,evo:false,count:0,damage:34,range:300,cooldown:3.5,cool:0},
+ fire:{name:'화염병',lv:0,max:5,evo:false,count:0,damage:10,range:180,duration:5,cooldown:3,cool:0},
+ drill:{name:'드릴샷',lv:0,max:5,evo:false,count:0,damage:15,range:Infinity,cooldown:2.5,cool:0}
 };
-
-let stats={damagePct:0,attackSpeedPct:0,weaponRangePct:0,weaponSizePct:0};
+const supports={
+ fuel:{name:'고성능 연료',lv:0,max:5,desc:'모든 무기 범위 +10%'},
+ ammo:{name:'고화력 탄약',lv:0,max:5,desc:'모든 무기 공격력 +10%'},
+ scroll:{name:'닌자 스크롤',lv:0,max:5,desc:'EXP 획득량 +8%'},
+ armor:{name:'부랑자의 갑옷',lv:0,max:5,desc:'받는 피해 -10%'},
+ drink:{name:'에너지 드링크',lv:0,max:5,desc:'5초마다 최대 HP의 1% 회복'},
+ cube:{name:'에너지 큐브',lv:0,max:5,desc:'모든 무기 쿨타임 -8%'},
+ exo:{name:'외골격 갑옷',lv:0,max:5,desc:'지속형 무기 효과시간 +10%'},
+ shoes:{name:'러닝화',lv:0,max:5,desc:'이동속도 +10%'},
+ thruster:{name:'탄약 추진기',lv:0,max:5,desc:'투사체 속도 +10%'},
+ fitness:{name:'피트니스 안내서',lv:0,max:5,desc:'최대 HP +20%, 증가분 회복'},
+ magnet:{name:'탄력 자석',lv:0,max:3,desc:'아이템 획득 범위 +100%'}
+};
+let stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0};
+let healTimer=5;
 
 const types=[
  {name:'slime',at:0,hp:1,speed:42,r:10,damage:1,xp:10,color:'#58d04b'},
@@ -84,10 +103,12 @@ function chooseType(){
 
 function reset(){
  player={x:0,y:0,r:12,hp:S.maxHp,maxHp:S.maxHp,speed:185,damage:S.damage,fireRate:.43,bulletSpeed:360,aimX:1,aimY:0,inv:0};
- enemies=[];shots=[];gems=[];drops=[];particles=[];texts=[];areaWarnings=[];
+ enemies=[];shots=[];gems=[];drops=[];particles=[];texts=[];areaWarnings=[];areas=[];
  score=0;level=1;xp=0;xpNeed=S.xpBase;time=0;spawnTimer=.4;shotTimer=.1;nextBoss=90;paused=false;over=false;won=false;last=performance.now();walkTime=0;killCount=0;
- for(const w of Object.values(weapons)){w.lv=0;w.evo=false;w.count=0;w.cool=0;w.hitTimer=0}
- stats={damagePct:0,attackSpeedPct:0,weaponRangePct:0,weaponSizePct:0};
+ for(const w of Object.values(weapons)){w.lv=0;w.evo=false;w.count=0;w.cool=0}
+ for(const s of Object.values(supports))s.lv=0;
+ stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0};
+ healTimer=5;
  document.getElementById('gameover').style.display='none';document.getElementById('levelup').style.display='none';
 updateWeaponsUI();requestAnimationFrame(loop);
 }
@@ -108,50 +129,81 @@ function fireGun(){
 }
 function addText(x,y,n){texts.push({x,y,n,age:0})}
 function burst(x,y,n=6){for(let i=0;i<n;i++){let a=Math.random()*6.28,s=25+Math.random()*90;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.4})}}
-function addXP(n){xp+=n;while(xp>=xpNeed){xp-=xpNeed;level++;xpNeed=Math.floor(S.xpBase*Math.pow(1.5,level-1));paused=true;showLevelUp();break}}
+function addXP(n){xp+=n*(1+stats.xpPct);while(xp>=xpNeed){xp-=xpNeed;level++;xpNeed=Math.floor(S.xpBase*Math.pow(1.5,level-1));paused=true;showLevelUp();break}}
+function stars(n,max=5){return '★'.repeat(Math.max(0,Math.min(max,n)))+'☆'.repeat(Math.max(0,max-n));}
 function availableChoices(){
- const arr=[];
- for(const [id,w] of Object.entries(weapons))if(w.lv<w.max||!w.evo)arr.push({id,title:w.lv?`${w.name} 강화 ${w.lv+1}`:w.name,desc:w.lv?`레벨 ${w.lv} → ${w.lv+1}`:'새 무기 획득'});
- arr.push({id:'damage',title:'공격력 +10%',desc:'총 포함 모든 공격'});
- arr.push({id:'speed',title:'공격속도 +10%',desc:'총 포함 모든 공격'});
- arr.push({id:'range',title:'공격범위 +10%',desc:'총 제외 모든 무기'});
- arr.push({id:'size',title:'무기 크기 +10%',desc:'총 제외 모든 무기'});
- return arr.sort(()=>Math.random()-.5).slice(0,4);
+ const list=[];
+ // New weapons first when not owned, otherwise allow star upgrades.
+ for(const [id,w] of Object.entries(weapons)){
+  if(w.lv<w.max){
+   const title=w.lv===0?`🆕 ${w.name}`:`${w.name}`;
+   const desc=w.lv===0?'새 무기 획득':`강화: ${stars(w.lv+1)}`;
+   list.push({id,title,desc,kind:'weapon',stars:w.lv+1});
+  }
+ }
+ for(const [id,s] of Object.entries(supports)){
+  if(s.lv<s.max)list.push({id,title:s.name,desc:s.desc,kind:'support',stars:s.lv+1});
+ }
+ // 일반 성장 옵션도 유지. 단, 같은 효과가 보조무기와 겹치므로 선택지에는 보조무기와 함께 등장할 수 있다.
+ if(stats.weaponSizePct<.5)list.push({id:'size',title:'무기 크기 +10%',desc:'모든 무기의 크기 +10%',kind:'stat',stars:Math.round(stats.weaponSizePct/.1)+1});
+ // 최대 3개를 무작위로 뽑아 선택창이 과밀해지지 않도록 한다.
+ for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]]}
+ return list.slice(0,3);
 }
 function showLevelUp(){
  const box=document.getElementById('choices');box.innerHTML='';
- for(const o of availableChoices()){
-  const b=document.createElement('button');b.className='choice';b.innerHTML=o.title+'<small>'+o.desc+'</small>';
-  b.onclick=()=>{applyChoice(o.id);document.getElementById('levelup').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};box.appendChild(b)
+ const opts=availableChoices();
+ for(const o of opts){
+  const b=document.createElement('button');b.className='choice';
+  b.innerHTML=`<span class="stars">${stars(o.stars)}</span><span class="tag">${o.kind==='weapon'?'WEAPON':'SUPPORT'}</span>${o.title}<small>${o.desc}</small>`;
+  b.onclick=()=>{applyChoice(o.id);document.getElementById('levelup').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};
+  box.appendChild(b)
  }
  document.getElementById('levelup').style.display='flex';
 }
 function applyChoice(id){
  if(weapons[id]){
   const w=weapons[id];
-  if(w.lv<w.max){
-   w.lv++;
-   if(id==='blades'){w.count=2+w.lv;w.rate=Math.max(.14,.28-w.lv*.018)}
-   if(id==='missile'){w.count=1+Math.floor((w.lv-1)/2);w.rate=Math.max(.65,1.25-w.lv*.08)}
-   if(id==='sonic'){w.count=1+Math.floor((w.lv-1)/2);w.rate=Math.max(.8,2.1-w.lv*.12)}
-   if(id==='lightning'){w.count=1+Math.floor((w.lv-1)/2);w.rate=Math.max(.85,2.5-w.lv*.14)}
-   if(w.lv===5){w.evo=true;w.count+=2;w.rate*=.72}
+  if(w.lv>=w.max)return;
+  w.lv++;
+  if(id==='blades')w.count=w.lv+1;
+  if(id==='lightning')w.count=1+Math.floor((w.lv-1)/2);
+  if(id==='rocket')w.count=1+Math.floor((w.lv-1)/2);
+  if(id==='fire')w.count=1+Math.floor((w.lv-1)/2);
+  if(id==='drill')w.count=1+Math.floor((w.lv-1)/2);
+  w.cool=0;
+ }else if(supports[id]){
+  const s=supports[id];
+  if(s.lv>=s.max)return;
+  s.lv++;
+  if(id==='fuel')stats.weaponRangePct+=.10;
+  else if(id==='ammo')stats.damagePct+=.10;
+  else if(id==='scroll')stats.xpPct+=.08;
+  else if(id==='armor')stats.damageReducePct+=.10;
+  else if(id==='shoes')stats.movePct+=.10;
+  else if(id==='thruster')stats.projectileSpeedPct+=.10;
+  else if(id==='fitness'){
+   const old=player.maxHp;player.maxHp*=1.20;player.hp=Math.min(player.maxHp,player.hp+(player.maxHp-old));
   }
- }else if(id==='damage')stats.damagePct+=.10;
- else if(id==='speed'){stats.attackSpeedPct+=.10;player.fireRate=Math.max(.08,player.fireRate*.9)}
- else if(id==='range')stats.weaponRangePct+=.10;
- else if(id==='size')stats.weaponSizePct+=.10;
+  else if(id==='drink'){}
+  else if(id==='cube'){}
+  else if(id==='exo'){}
+  else if(id==='magnet')stats.magnetPct+=1.0;
+ }else if(id==='size')stats.weaponSizePct+=.10;
  updateWeaponsUI();
 }
 
 function updateWeaponsUI(){
- const a=Object.values(weapons).filter(w=>w.lv>0).map(w=>`${w.name} Lv.${w.lv}${w.evo?'★':''}`);
+ const a=Object.values(weapons).filter(w=>w.lv>0).map(w=>`${w.name} ${stars(w.lv)}`);
+ const b=Object.values(supports).filter(x=>x.lv>0).map(x=>`${x.name} ${stars(x.lv,x.max)}`);
  document.getElementById('weaponList').textContent=a.join(' · ');
+ document.getElementById('supportList').textContent=b.join(' · ');
 }
 
 function drop(x,y,type){drops.push({x,y,type,r:11,bob:Math.random()*6.28})}
 function kill(e,source='normal'){
- if(e.hp>0)return;
+ if(e.dead||e.hp>0)return;
+ e.dead=true;
  score+=e.boss?250:10;killCount++;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});
  if(e.boss){gems.push({x:e.x+8,y:e.y,r:7,xp:e.xp});drop(e.x-14,e.y,'bomb');drop(e.x+14,e.y,'magnet')}
  else if(Math.random()<.05)drop(e.x,e.y,['bomb','magnet','heal'][Math.floor(Math.random()*3)]);
@@ -165,41 +217,37 @@ function collectDrop(d){
 function weaponUpdate(dt){
  const rangeBonus=1+stats.weaponRangePct,sizeBonus=1+stats.weaponSizePct,damageBonus=1+stats.damagePct;
  for(const w of Object.values(weapons))w.cool-=dt;
+ // 수호자: 5초 공격 후 3초 휴식. 공격 중에는 캐릭터 주변을 회전.
  const b=weapons.blades;
  if(b.lv){
-  b.hitTimer=Math.max(0,b.hitTimer-dt);
-  const ang=time*(b.evo?3.6:2.7),rad=b.range*rangeBonus;
-  for(let i=0;i<b.count;i++){
-   const a=ang+i*6.283185/b.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad,r=9*sizeBonus;
-   for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-x,e.y-y)<e.r+r&&b.hitTimer<=0){e.hp-=b.damage*damageBonus;addText(e.x,e.y-e.r,b.damage.toFixed(0));b.hitTimer=.12;}
+  const cycle=b.duration*(1+supports.exo.lv*.10)+b.cooldown;
+  const phase=time%cycle;
+  if(phase<b.duration*(1+supports.exo.lv*.10)){
+   const rad=b.range*rangeBonus,ang=time*2.8;
+   for(let i=0;i<b.count;i++){const a=ang+i*6.283185/b.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad,r=9*sizeBonus;for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-x,e.y-y)<e.r+r){e.hp-=b.damage*damageBonus*dt/.35;}}
   }
  }
- const m=weapons.missile;if(m.lv&&m.cool<=0){for(let i=0;i<m.count;i++)fireMissile(m);m.cool=Math.max(.45,m.rate*(1-stats.attackSpeedPct));}
- const so=weapons.sonic;if(so.lv&&so.cool<=0){for(let i=0;i<so.count;i++)sonic();so.cool=Math.max(.55,so.rate*(1-stats.attackSpeedPct));}
- const li=weapons.lightning;if(li.lv&&li.cool<=0){for(let i=0;i<li.count;i++)lightning();li.cool=Math.max(.6,li.rate*(1-stats.attackSpeedPct));}
+ const l=weapons.lightning;if(l.lv&&l.cool<=0){for(let i=0;i<l.count;i++)lightning();l.cool=l.cooldown*(1-0.08*supports.cube.lv);}
+ const r=weapons.rocket;if(r.lv&&r.cool<=0){for(let i=0;i<r.count;i++)fireRocket(r);r.cool=r.cooldown*(1-0.08*supports.cube.lv);}
+ const f=weapons.fire;if(f.lv&&f.cool<=0){for(let i=0;i<f.count;i++)throwFire(f);f.cool=f.cooldown*(1-0.08*supports.cube.lv);}
+ const d=weapons.drill;if(d.lv&&d.cool<=0){for(let i=0;i<d.count;i++)fireDrill(d);d.cool=d.cooldown*(1-0.08*supports.cube.lv);}
 }
-function fireMissile(w){
- const cs=enemies.filter(e=>e.hp>0&&!e.dead);if(!cs.length)return;
- const t=cs.reduce((best,e)=>!best||Math.hypot(e.x-player.x,e.y-player.y)<Math.hypot(best.x-player.x,best.y-player.y)?e:best,null);
- const a=Math.atan2(t.y-player.y,t.x-player.x);
- shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*250,vy:Math.sin(a)*250,r:6,life:2.4,damage:w.damage*(1+stats.damagePct),missile:true});
-}
-function missileExplosion(s){
- const r=38*(1+stats.weaponRangePct);burst(s.x,s.y,14);
- for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){e.hp-=s.damage;addText(e.x,e.y-e.r,s.damage.toFixed(0));if(e.hp<=0)kill(e,'missile');}
-}
-function sonic(){const w=weapons.sonic,rad=w.range*(1+stats.weaponRangePct);burst(player.x,player.y,7);for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-player.x,e.y-player.y)<rad){e.hp-=w.damage*(1+stats.damagePct);addText(e.x,e.y-e.r,w.damage.toFixed(0));if(e.hp<=0)kill(e,'sonic');}}
-function lightning(){const w=weapons.lightning,cs=enemies.filter(e=>e.hp>0&&!e.dead);if(!cs.length)return;const t=cs[Math.floor(Math.random()*cs.length)],r=32*(1+stats.weaponRangePct);areaWarnings.push({x:t.x,y:t.y,r,t:.12,damage:w.damage*(1+stats.damagePct),lightning:true,done:false});}
-
+function nearestEnemy(maxRange=Infinity){let t=null,b=Infinity;for(const e of enemies){if(e.hp<=0)continue;const d=Math.hypot(e.x-player.x,e.y-player.y);if(d<=maxRange&&d<b){b=d;t=e}}return t}
+function fireRocket(w){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const a=Math.atan2(t.y-player.y,t.x-player.x),spd=250*(1+stats.projectileSpeedPct);shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:6,life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct),rocket:true});}
+function rocketExplosion(s){const r=40*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);burst(s.x,s.y,16);for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){e.hp-=s.damage;addText(e.x,e.y-e.r,s.damage.toFixed(0));if(e.hp<=0)kill(e,'rocket');}}
+function lightning(){const w=weapons.lightning,t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const r=38*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);areaWarnings.push({x:t.x,y:t.y,r,t:.12,damage:w.damage*(1+stats.damagePct),lightning:true,done:false});}
+function throwFire(w){const ang=Math.random()*Math.PI*2,dist=Math.random()*w.range*(1+stats.weaponRangePct);const x=player.x+Math.cos(ang)*dist,y=player.y+Math.sin(ang)*dist;const spd=360*(1+stats.projectileSpeedPct);const a=Math.atan2(y-player.y,x-player.x);shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:7,life:Math.max(.18,dist/spd),damage:w.damage*(1+stats.damagePct),fireBottle:true,targetX:x,targetY:y});}
+function fireDrill(w){const a=Math.atan2(player.aimY,player.aimX);const spd=300*(1+stats.projectileSpeedPct);shots.push({x:player.x+player.aimX*16,y:player.y+player.aimY*16,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:8,life:10,damage:w.damage*(1+stats.damagePct),drill:true,bounces:0,hit:new Set()});}
 function update(dt){
  if(paused||over)return;
  time+=dt;
+ healTimer-=dt;if(healTimer<=0){healTimer=5;if(supports.drink.lv)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*.01*supports.drink.lv);}
  if(time>=540){time=540;if(!enemies.some(e=>e.boss&&e.bossIndex===4))boss(4);}
  else if(time>=nextBoss){boss(Math.floor(nextBoss/90)-1);nextBoss+=90;}
  spawnTimer-=dt;if(spawnTimer<=0){spawnEnemy();spawnTimer=Math.max(.10,.78-time*.0009-level*.006);}
  shotTimer-=dt;if(shotTimer<=0){fireGun();shotTimer=Math.max(.08,player.fireRate/(1+stats.attackSpeedPct));}
  const moving=joy.on&&(Math.abs(joy.x)+Math.abs(joy.y)>.04),len=Math.hypot(joy.x,joy.y)||1;
- if(moving){player.x+=joy.x/len*player.speed*dt;player.y+=joy.y/len*player.speed*dt;walkTime+=dt*9}else walkTime+=dt*2;
+ if(moving){player.x+=joy.x/len*player.speed*(1+stats.movePct)*dt;player.y+=joy.y/len*player.speed*(1+stats.movePct)*dt;walkTime+=dt*9}else walkTime+=dt*2;
  player.inv=Math.max(0,player.inv-dt);
  for(const e of enemies){
   if(e.hp<=0)continue;
@@ -208,14 +256,28 @@ function update(dt){
   e.x+=dx/d*e.speed*dt;e.y+=dy/d*e.speed*dt;e.phase+=dt*2;
   for(const o of enemies)if(o!==e&&o.hp>0){let ox=e.x-o.x,oy=e.y-o.y,od=Math.hypot(ox,oy)||1,minD=e.r+o.r+2;if(od<minD){let p=(minD-od)/od*.5;e.x+=ox*p;e.y+=oy*p;}}
   if(e.boss){e.attackCd-=dt;if(e.attackCd<=0){e.attackCd=3-e.bossIndex*.2;areaWarnings.push({x:player.x,y:player.y,r:42+e.bossIndex*8,t:1,damage:e.contact,lightning:false,done:false});}}
-  if(d<e.r+player.r&&player.inv<=0){player.hp-=e.contact;player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(e.contact));burst(player.x,player.y,6);}
+  if(d<e.r+player.r&&player.inv<=0){player.hp-=e.contact*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(e.contact));burst(player.x,player.y,6);}
  }
- for(const a of areaWarnings){a.t-=dt;if(a.t<=0&&!a.done){if(a.lightning){for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){e.hp-=a.damage;addText(e.x,e.y-e.r,a.damage.toFixed(0));if(e.hp<=0)kill(e,'lightning');}}else if(Math.hypot(player.x-a.x,player.y-a.y)<a.r+player.r&&player.inv<=0){player.hp-=a.damage;player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(a.damage));}burst(a.x,a.y,a.lightning?18:14);a.done=true;}}
+ for(const a of areaWarnings){a.t-=dt;if(a.t<=0&&!a.done){if(a.lightning){for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){e.hp-=a.damage;addText(e.x,e.y-e.r,a.damage.toFixed(0));if(e.hp<=0)kill(e,'lightning');}}else if(Math.hypot(player.x-a.x,player.y-a.y)<a.r+player.r&&player.inv<=0){player.hp-=a.damage*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(a.damage));}burst(a.x,a.y,a.lightning?18:14);a.done=true;}}
  areaWarnings=areaWarnings.filter(a=>!a.done);
- for(const sh of shots){sh.x+=sh.vx*dt;sh.y+=sh.vy*dt;sh.life-=dt;for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r){if(sh.missile)missileExplosion(sh);else{e.hp-=sh.damage;addText(e.x,e.y-e.r,sh.damage.toFixed(0));if(e.hp<=0)kill(e,'gun');}sh.life=0;break;}}
+ for(const sh of shots){
+  sh.x+=sh.vx*dt;sh.y+=sh.vy*dt;sh.life-=dt;
+  if(sh.fireBottle){if(sh.life<=0){areas.push({x:sh.targetX,y:sh.targetY,r:52*(1+stats.weaponRangePct)*(1+stats.weaponSizePct),life:weapons.fire.duration*(1+supports.exo.lv*.10),tick:0,damage:sh.damage});burst(sh.targetX,sh.targetY,12);sh.life=0;}}
+  else if(sh.drill){
+   // 화면 가장자리에 해당하는 현재 카메라 영역에서 튕김. 3회 튕기면 소멸.
+   const left=player.x-W/2,right=player.x+W/2,top=player.y-H/2,bottom=player.y+H/2;
+   if(sh.x<left||sh.x>right){sh.x=Math.max(left,Math.min(right,sh.x));sh.vx*=-1;sh.bounces++;}
+   if(sh.y<top||sh.y>bottom){sh.y=Math.max(top,Math.min(bottom,sh.y));sh.vy*=-1;sh.bounces++;}
+   for(const e of enemies)if(e.hp>0&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r&&!sh.hit.has(e)){sh.hit.add(e);e.hp-=sh.damage;addText(e.x,e.y-e.r,sh.damage.toFixed(0));if(e.hp<=0)kill(e,'drill');}
+   if(sh.bounces>=3)sh.life=0;
+  }else{
+   for(const e of enemies)if(e.hp>0&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r){if(sh.rocket){rocketExplosion(sh);}else{e.hp-=sh.damage;addText(e.x,e.y-e.r,sh.damage.toFixed(0));if(e.hp<=0)kill(e,'gun');}sh.life=0;break;}}
+ }
+ for(const a of areas){a.life-=dt;a.tick-=dt;if(a.tick<=0){a.tick=.5;for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){e.hp-=a.damage;addText(e.x,e.y-e.r,a.damage.toFixed(0));if(e.hp<=0)kill(e,'fire');}}}
+ areas=areas.filter(a=>a.life>0);
  weaponUpdate(dt);
  for(const e of enemies)if(e.hp<=0)kill(e);
- for(const g of gems){let dx=player.x-g.x,dy=player.y-g.y,d=Math.hypot(dx,dy)||1;if(g.boost>0){g.boost-=dt*1000;g.x+=dx/d*420*dt;g.y+=dy/d*420*dt;}if(d<player.r+g.r){addXP(g.xp);g.r=0;}}
+ for(const g of gems){let dx=player.x-g.x,dy=player.y-g.y,d=Math.hypot(dx,dy)||1;const magnetRange=20*(1+stats.magnetPct);if(g.boost>0){g.boost-=dt*1000;g.x+=dx/d*420*dt;g.y+=dy/d*420*dt;}else if(d<magnetRange){const pull=260+Math.max(0,magnetRange-d)*4;g.x+=dx/d*pull*dt;g.y+=dy/d*pull*dt;}if(d<player.r+g.r){addXP(g.xp);g.r=0;}}
  for(const d of drops)d.bob+=dt;
  for(const d of drops)if(Math.hypot(player.x-d.x,player.y-d.y)<player.r+d.r){collectDrop(d);d.r=0;}
  for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;}
@@ -239,9 +301,9 @@ function draw(){
  for(const a of areaWarnings){ctx.globalAlpha=.24;ctx.fillStyle=a.lightning?'#8ed8ff':'#ff4455';ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,6.283);ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=a.lightning?'#e8f8ff':'#ff6677';ctx.lineWidth=2;ctx.stroke();if(a.lightning){ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(a.x-5,a.y-75);ctx.lineTo(a.x+5,a.y-45);ctx.lineTo(a.x-4,a.y-22);ctx.lineTo(a.x+4,a.y);ctx.stroke();}}
  for(const g of gems){const col=g.xp>=70?'#ff3b30':g.xp>=40?'#ff8a24':g.xp>=20?'#ffd52a':'#62d9ff';ctx.save();ctx.translate(g.x,g.y);ctx.rotate(.785);ctx.fillStyle=col;ctx.fillRect(-5,-5,10,10);ctx.restore();}
  for(const d of drops){const yy=d.y+Math.sin(d.bob)*2;ctx.save();ctx.translate(d.x,yy);if(d.type==='bomb'){ctx.fillStyle='#e33d45';ctx.beginPath();ctx.arc(0,2,10,0,6.283);ctx.fill();ctx.fillStyle='#222';ctx.fillRect(-2,-11,4,5);ctx.fillStyle='#ffd34e';ctx.fillRect(2,-14,6,3);}else if(d.type==='magnet'){ctx.strokeStyle='#4b8dff';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,9,0,Math.PI);ctx.stroke();ctx.fillStyle='#ef4444';ctx.fillRect(-11,-2,5,9);ctx.fillRect(6,-2,5,9);}else{ctx.fillStyle='#fff';ctx.fillRect(-9,-9,18,18);ctx.fillStyle='#e33d45';ctx.fillRect(-2,-8,4,16);ctx.fillRect(-8,-2,16,4);}ctx.restore();}
- if(weapons.blades.lv){const w=weapons.blades,rad=w.range*(1+stats.weaponRangePct),ang=time*(w.evo?3.6:2.7),br=9*(1+stats.weaponSizePct);for(let i=0;i<w.count;i++){const a=ang+i*6.283185/w.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad;ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillStyle=w.evo?'#ffdf4d':'#f4f7ff';ctx.strokeStyle='#20242a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(br+7,0);ctx.lineTo(-br,-br*.6);ctx.lineTo(-br*.3,0);ctx.lineTo(-br,br*.6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}}
+ if(weapons.blades.lv){const w=weapons.blades,active=w.duration*(1+supports.exo.lv*.10),cycle=active+w.cooldown,phase=time%cycle;if(phase<active){const rad=w.range*(1+stats.weaponRangePct),ang=time*2.8,br=9*(1+stats.weaponSizePct);for(let i=0;i<w.count;i++){const a=ang+i*6.283185/w.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad;ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillStyle=w.evo?'#ffdf4d':'#f4f7ff';ctx.strokeStyle='#20242a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(br+7,0);ctx.lineTo(-br,-br*.6);ctx.lineTo(-br*.3,0);ctx.lineTo(-br,br*.6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}}}
  for(const e of enemies)if(!e.dead)drawEnemy(e);
- for(const sh of shots){if(sh.missile){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#ff7b21';ctx.fillRect(-9,-4,18,8);ctx.fillStyle='#ffd34e';ctx.fillRect(7,-2,6,4);ctx.restore();}else{ctx.fillStyle='#f2c14e';ctx.fillRect(sh.x-4,sh.y-2,8,4);}}
+ for(const sh of shots){if(sh.fireBottle){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#45c95a';ctx.strokeStyle='#17351d';ctx.lineWidth=2;ctx.fillRect(-5,-9,10,18);ctx.fillStyle='#a7e89b';ctx.fillRect(-3,-13,6,4);ctx.restore();}else if(sh.rocket){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#ff7b21';ctx.beginPath();ctx.moveTo(11,0);ctx.lineTo(-8,-5);ctx.lineTo(-5,0);ctx.lineTo(-8,5);ctx.closePath();ctx.fill();ctx.fillStyle='#ffd34e';ctx.fillRect(-12,-2,5,4);ctx.restore();}else if(sh.drill){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#c7d0d9';ctx.strokeStyle='#20242a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-9,-7);ctx.lineTo(-4,0);ctx.lineTo(-9,7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}else{ctx.fillStyle='#f2c14e';ctx.fillRect(sh.x-4,sh.y-2,8,4);}}
  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/.4);ctx.fillStyle='#f2c14e';ctx.fillRect(p.x-2,p.y-2,4,4);}ctx.globalAlpha=1;for(const t of texts){ctx.globalAlpha=Math.max(0,1-t.age/.8);ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(t.n,t.x,t.y);}ctx.globalAlpha=1;drawPlayer();ctx.restore();
 }
 
