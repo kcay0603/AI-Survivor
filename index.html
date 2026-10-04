@@ -64,9 +64,33 @@ const S={maxHp:100,damage:12,monsterHp:20,contact:10,xpBase:40};
 let player,enemies,shots,gems,drops,particles,texts,areaWarnings,areas,score,level,xp,xpNeed,time,animTime,spawnTimer,shotTimer,nextBoss,paused,over,won,last,walkTime,killCount,chestPaused,finalBossDefeated,gameStarted;
 const joy={on:false,id:null,bx:0,by:0,x:0,y:0};
 let lightningSeq=[];
+let enemyGrid=new Map();
+const GRID_CELL=96;
+function gridKey(gx,gy){return gx+','+gy}
+function rebuildEnemyGrid(){
+  enemyGrid.clear();
+  for(const e of enemies){
+    if(e.hp<=0) continue;
+    const gx=Math.floor(e.x/GRID_CELL), gy=Math.floor(e.y/GRID_CELL), key=gridKey(gx,gy);
+    let a=enemyGrid.get(key); if(!a){a=[];enemyGrid.set(key,a)}
+    a.push(e);
+  }
+}
+function queryEnemies(x,y,r){
+  const out=[]; const rr=r*r;
+  const minX=Math.floor((x-r)/GRID_CELL), maxX=Math.floor((x+r)/GRID_CELL);
+  const minY=Math.floor((y-r)/GRID_CELL), maxY=Math.floor((y+r)/GRID_CELL);
+  for(let gx=minX;gx<=maxX;gx++) for(let gy=minY;gy<=maxY;gy++){
+    const a=enemyGrid.get(gridKey(gx,gy)); if(!a) continue;
+    for(const e of a){ if(e.hp<=0) continue; const dx=e.x-x,dy=e.y-y; if(dx*dx+dy*dy<=rr) out.push(e); }
+  }
+  return out;
+}
+function isVisible(e){return e.x>=player.x-W/2 && e.x<=player.x+W/2 && e.y>=player.y-H/2 && e.y<=player.y+H/2}
+
 let damageTotals={kunai:0,blades:0,lightning:0,rocket:0,fire:0,drill:0};
 const weapons={
- kunai:{name:'쿠나이',lv:1,max:5,evo:false,count:1,damage:20,range:350,cooldown:.43,cool:0,pierce:0,baseDamage:20},
+ kunai:{name:'쿠나이',lv:1,max:5,evo:false,count:1,damage:20,range:350,cooldown:.3,cool:0,pierce:0,baseDamage:20},
  blades:{name:'수호자',lv:0,max:5,evo:false,count:0,damage:35,range:100,duration:6,cooldown:9,cool:0,active:0,phase:0},
  lightning:{name:'번개 발사기',lv:0,max:5,evo:false,count:0,damage:68,range:300,cooldown:4,cool:0},
  rocket:{name:'로켓',lv:0,max:5,evo:false,count:0,damage:46,range:300,cooldown:3.5,cool:0},
@@ -129,15 +153,15 @@ function spawnEnemy(){
 }
 function boss(kind){
  const names=['Crimson Brute','Azure Warden','Violet Reaper','Golden Titan','Final Overlord'];
- const a=Math.random()*6.28,d=Math.max(W,H)/2+100;
+ const a=Math.random()*6.28,d=(k===4?Math.max(70,Math.min(W,H)/2-48):Math.max(W,H)/2+100);
  const k=Math.min(kind,4),hp=(k===4?12000:200*(k+1));
- enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5});
+ enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5,finalBoss:k===4});
 }
 function fireGun(){
  const w=weapons.kunai;
  const baseRange=350;
  let t=null,b=baseRange*baseRange;
- for(const e of enemies){if(e.hp<=0)continue;const d=(e.x-player.x)**2+(e.y-player.y)**2;if(d<=b){b=d;t=e}}
+ for(const e of queryEnemies(player.x,player.y,baseRange)){const dx=e.x-player.x,dy=e.y-player.y,d=dx*dx+dy*dy;if(d<=b){b=d;t=e}}
  if(!t)return;
  const dx=t.x-player.x,dy=t.y-player.y,l=Math.hypot(dx,dy)||1;
  player.aimX=dx/l;player.aimY=dy/l;
@@ -146,9 +170,9 @@ function fireGun(){
  shots.push({x:player.x+player.aimX*17,y:player.y+player.aimY*17,vx:player.aimX*speed,vy:player.aimY*speed,r:4*size,life:baseRange/speed,damage:w.baseDamage*(1+stats.damagePct),basicGun:true,pierce:Math.max(0,w.lv-1),hit:new Set()});
 }
 
-function dealWeaponDamage(e,amount,weaponId,source='weapon'){ if(!e||e.hp<=0||e.dead)return; e.hp-=amount; damageTotals[weaponId]=(damageTotals[weaponId]||0)+amount; e.hitTextCd=(e.hitTextCd||0)-.033; if(e.hitTextCd<=0){addText(e.x,e.y-e.r,amount.toFixed(0));e.hitTextCd=.12;} if(e.hp<=0)kill(e,source); }
-function addText(x,y,n){if(texts.length<140)texts.push({x,y,n,age:0})}
-function burst(x,y,n=6){n=Math.min(n,8);if(particles.length>90)return;for(let i=0;i<n;i++){let a=Math.random()*6.28,s=25+Math.random()*90;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.4})}}
+function dealWeaponDamage(e,amount,weaponId,source='weapon'){ if(!e||e.hp<=0||e.dead)return; if(e.finalBoss&&!isVisible(e))return; e.hp-=amount; damageTotals[weaponId]=(damageTotals[weaponId]||0)+amount; e.hitTextCd=(e.hitTextCd||0)-.033; if(e.hitTextCd<=0){addText(e.x,e.y-e.r,amount.toFixed(0));e.hitTextCd=.12;} if(e.hp<=0)kill(e,source); }
+function addText(x,y,n){if(texts.length<40)texts.push({x,y,n,age:0})}
+function burst(x,y,n=6){n=Math.min(n,8);if(particles.length>45)return;for(let i=0;i<n;i++){let a=Math.random()*6.28,s=25+Math.random()*90;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.4})}}
 function addXP(n){xp+=n*(1+stats.xpPct);while(xp>=xpNeed){xp-=xpNeed;level++;xpNeed=Math.floor(S.xpBase*Math.pow(1.1,level-1));paused=true;showLevelUp();break}}
 function stars(n,max=5){return '★'.repeat(Math.max(0,Math.min(max,n)))+'☆'.repeat(Math.max(0,max-n));}
 function availableChoices(){
@@ -224,6 +248,7 @@ function updateWeaponsUI(){
 function drop(x,y,type){if(drops.length<24)drops.push({x,y,type,r:11,bob:Math.random()*6.28})}
 function kill(e,source='normal'){
  if(e.dead||e.hp>0)return;
+ if(e.finalBoss&&!isVisible(e))return;
  e.dead=true;
  score+=e.boss?250:10;killCount++;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});
  if(e.boss){if(e.bossIndex===4)finalBossDefeated=true;gems.push({x:e.x+8,y:e.y,r:7,xp:e.xp});drop(e.x-22,e.y,'bomb');drop(e.x+22,e.y,'magnet');drop(e.x,e.y-20,'chest')}
@@ -231,7 +256,7 @@ function kill(e,source='normal'){
  burst(e.x,e.y,e.boss?14:5);
 }
 function collectDrop(d){
- if(d.type==='bomb'){for(const e of enemies)if(e.hp>0){if(e.boss){e.hp=Math.max(0,e.hp-e.max*.05);addText(e.x,e.y-e.r,'-'+Math.ceil(e.max*.05));}else{e.hp=0;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});kill(e,'bomb')}}}
+ if(d.type==='bomb'){for(const e of enemies)if(e.hp>0){if(e.boss){if(e.finalBoss&&!isVisible(e))continue;e.hp=Math.max(0,e.hp-e.max*.05);addText(e.x,e.y-e.r,'-'+Math.ceil(e.max*.05));}else{e.hp=0;gems.push({x:e.x,y:e.y,r:6,xp:e.xp});kill(e,'bomb')}}}
  if(d.type==='magnet'){for(const g of gems)g.boost=5000}
  if(d.type==='heal')player.hp=Math.min(player.maxHp,player.hp+15);
  if(d.type==='chest'){d.r=0;openChestReward();}
@@ -268,7 +293,7 @@ function weaponUpdate(dt){
      const rad=b.range*rangeBonus,ang=animTime*2.8;
      for(let i=0;i<b.count;i++){
        const a=ang+i*6.283185/b.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad,r=11*sizeBonus;
-       for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-x,e.y-y)<e.r+r){
+       for(const e of queryEnemies(x,y,r+24))if(e.hp>0&&Math.hypot(e.x-x,e.y-y)<e.r+r){
          e.bladeCd=(e.bladeCd||0)-dt;
          if(e.bladeCd<=0){dealWeaponDamage(e,b.damage*damageBonus,'blades','blade');e.bladeCd=.35;}
        }
@@ -289,7 +314,7 @@ function weaponUpdate(dt){
  if(d.lv>=5){ if(!shots.some(s=>s.drill&&s.homing&&s.life>0)) fireDrill(d); } else if(d.lv&&d.cool<=0){for(let i=0;i<d.count;i++)fireDrill(d);d.cool=d.cooldown*(1-0.08*supports.cube.lv);}
 }
 function startLightningSequence(){
- const w=weapons.lightning, candidates=enemies.filter(e=>e.hp>0&&Math.hypot(e.x-player.x,e.y-player.y)<=w.range*(1+stats.weaponRangePct));
+ const w=weapons.lightning, candidates=queryEnemies(player.x,player.y,w.range*(1+stats.weaponRangePct));
  if(!candidates.length)return;
  const pool=[...candidates].sort(()=>Math.random()-.5);
  lightningSeq.push({remaining:w.count,pool,next:0,first:false});
@@ -306,9 +331,9 @@ function processLightning(dt){
  lightningSeq=lightningSeq.filter(q=>q.remaining>0);
 }
 
-function nearestEnemy(maxRange=Infinity){let t=null,b=Infinity;for(const e of enemies){if(e.hp<=0)continue;const d=Math.hypot(e.x-player.x,e.y-player.y);if(d<=maxRange&&d<b){b=d;t=e}}return t}
+function nearestEnemy(maxRange=Infinity){let t=null,b=Infinity;const r=maxRange===Infinity?Math.max(W,H):maxRange;for(const e of queryEnemies(player.x,player.y,r)){const dx=e.x-player.x,dy=e.y-player.y,d=dx*dx+dy*dy;if(d<=maxRange*maxRange&&d<b){b=d;t=e}}return t}
 function fireRocket(w,index=0,total=1){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const base=Math.atan2(t.y-player.y,t.x-player.x);const spread=total>1?0.16:0;const a=base+(index-(total-1)/2)*spread;const spd=250*(1+stats.projectileSpeedPct),giant=w.lv>=5;shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:(giant?14:6)*((1+stats.weaponSizePct)),life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct)*(w.lv>=3&&w.lv<5?1.1:1),rocket:true,giant});}
-function rocketExplosion(s){const r=(s.giant?58:40)*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);burst(s.x,s.y,s.giant?28:16);for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){dealWeaponDamage(e,s.damage,'rocket','rocket');}}
+function rocketExplosion(s){const r=(s.giant?58:40)*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);burst(s.x,s.y,s.giant?28:16);for(const e of queryEnemies(s.x,s.y,r+24))if(e.hp>0&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){dealWeaponDamage(e,s.damage,'rocket','rocket');}}
 function lightning(){startLightningSequence();}
 
 function throwFire(w,fixedAng=null,fixedDist=null,fixedNoBonus=false){const ang=fixedAng===null?Math.random()*Math.PI*2:fixedAng;const dist=fixedDist===null?Math.random()*w.range*(1+stats.weaponRangePct):fixedDist;const x=player.x+Math.cos(ang)*dist,y=player.y+Math.sin(ang)*dist;const spd=360*(1+stats.projectileSpeedPct);const a=Math.atan2(y-player.y,x-player.x);shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:7,life:Math.max(.18,dist/spd),damage:w.damage*(1+stats.damagePct),fireBottle:true,targetX:x,targetY:y,fixedFive:fixedNoBonus});}
@@ -318,7 +343,7 @@ function fireDrill(w){
  const a=Math.atan2(dy/l,dx/l),spd=300*(1+stats.projectileSpeedPct);
  shots.push({x:player.x+Math.cos(a)*16,y:player.y+Math.sin(a)*16,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:8*(1+stats.weaponSizePct),life:w.lv>=5?999999:10,damage:w.damage*(1+stats.damagePct),drill:true,bounces:0,hit:new Set(),hitCooldowns:w.lv>=5?new WeakMap():null,homing:w.lv>=5});
 }
-function nearestVisibleEnemy(maxRange=Infinity){const left=player.x-W/2, right=player.x+W/2, top=player.y-H/2, bottom=player.y+H/2;let t=null,b=Infinity;for(const e of enemies){if(e.hp<=0||e.x<left||e.x>right||e.y<top||e.y>bottom)continue;const d=Math.hypot(e.x-player.x,e.y-player.y);if(d<=maxRange&&d<b){b=d;t=e}}return t;}
+function nearestVisibleEnemy(maxRange=Infinity){const r=maxRange===Infinity?Math.max(W,H):maxRange;let t=null,b=Infinity;for(const e of queryEnemies(player.x,player.y,r)){if(!isVisible(e))continue;const dx=e.x-player.x,dy=e.y-player.y,d=dx*dx+dy*dy;if(d<=maxRange*maxRange&&d<b){b=d;t=e}}return t;}
 
 function update(dt){
  if(paused||over)return;
@@ -343,14 +368,15 @@ function update(dt){
   if(e.boss){e.attackCd-=dt;if(e.attackCd<=0){e.attackCd=2.8-Math.min(.8,e.bossIndex*.12);const charge=Math.random()<.55;const tx=player.x,ty=player.y;if(charge){const dx=tx-e.x,dy=ty-e.y,l=Math.hypot(dx,dy)||1;areaWarnings.push({x:tx,y:ty,r:48+e.bossIndex*8,t:1,damage:e.contact*1.5,lightning:false,charge:true,done:false,boss:e,dx:dx/l,dy:dy/l});}else{if(d<=250){areaWarnings.push({x:tx,y:ty,r:34+e.bossIndex*6,t:.45,damage:e.contact*1.25,lightning:false,ranged:true,done:false});}}}}
   if(d<e.r+player.r&&player.inv<=0){player.hp-=e.contact*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(e.contact));burst(player.x,player.y,4);}
  }
- // Spatial-hash enemy separation: avoids the expensive all-enemies-vs-all-enemies loop in late game.
- if(enemies.length>1){
-   const cell=64,grid=new Map();
-   for(const e of enemies){if(e.hp<=0)continue;const gx=Math.floor(e.x/cell),gy=Math.floor(e.y/cell),key=gx+','+gy;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(e);}
-   for(const e of enemies){if(e.hp<=0)continue;const gx=Math.floor(e.x/cell),gy=Math.floor(e.y/cell);
-     for(let ox=-1;ox<=1;ox++)for(let oy=-1;oy<=1;oy++){const list=grid.get((gx+ox)+','+(gy+oy));if(!list)continue;for(const o of list){if(o===e||o.hp<=0)continue;const dx=e.x-o.x,dy=e.y-o.y,od=Math.hypot(dx,dy)||1,minD=e.r+o.r+2;if(od<minD){const p=(minD-od)/od*.25;e.x+=dx*p;e.y+=dy*p;}}}}
+ // Spatial hash is built once per frame and reused by all weapon collision queries.
+ rebuildEnemyGrid();
+ if(enemies.length>1 && (enemies.length<55 || Math.floor(animTime*60)%2===0)){
+   for(const e of enemies){if(e.hp<=0)continue;const gx=Math.floor(e.x/GRID_CELL),gy=Math.floor(e.y/GRID_CELL);
+     for(let ox=-1;ox<=1;ox++)for(let oy=-1;oy<=1;oy++){const list=enemyGrid.get(gridKey(gx+ox,gy+oy));if(!list)continue;for(const o of list){if(o===e||o.hp<=0||o.dead)continue;const dx=e.x-o.x,dy=e.y-o.y,od2=dx*dx+dy*dy,minD=e.r+o.r+2;if(od2<minD*minD){const od=Math.sqrt(od2)||1,p=(minD-od)/od*.25;e.x+=dx*p;e.y+=dy*p;}}}}
+   }
+   rebuildEnemyGrid();
  }
- for(const a of areaWarnings){a.t-=dt;if(a.t<=0&&!a.done){if(a.lightning){for(const e of enemies)if(e.hp>0&&!e.dead&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'lightning','lightning');}}else if(a.ranged){shots.push({x:a.x,y:a.y,vx:0,vy:0,r:a.r*.55,life:.35,damage:a.damage,bossBlast:true,hit:new Set()});}else if(a.charge&&a.boss&&!a.boss.dead){a.boss.chargeX=a.dx;a.boss.chargeY=a.dy;a.boss.chargeT=.42;}else if(Math.hypot(player.x-a.x,player.y-a.y)<a.r+player.r&&player.inv<=0){player.hp-=a.damage*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(a.damage));}burst(a.x,a.y,a.lightning?18:14);a.done=true;}}
+ for(const a of areaWarnings){a.t-=dt;if(a.t<=0&&!a.done){if(a.lightning){for(const e of queryEnemies(a.x,a.y,a.r+24))if(e.hp>0&&!e.dead&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'lightning','lightning');}}else if(a.ranged){shots.push({x:a.x,y:a.y,vx:0,vy:0,r:a.r*.55,life:.35,damage:a.damage,bossBlast:true,hit:new Set()});}else if(a.charge&&a.boss&&!a.boss.dead){a.boss.chargeX=a.dx;a.boss.chargeY=a.dy;a.boss.chargeT=.42;}else if(Math.hypot(player.x-a.x,player.y-a.y)<a.r+player.r&&player.inv<=0){player.hp-=a.damage*(1-stats.damageReducePct);player.inv=1;addText(player.x,player.y-player.r-8,'-'+Math.ceil(a.damage));}burst(a.x,a.y,a.lightning?18:14);a.done=true;}}
  areaWarnings=areaWarnings.filter(a=>!a.done);
  for(const sh of shots){
   sh.x+=sh.vx*dt;sh.y+=sh.vy*dt;sh.life-=dt;
@@ -360,28 +386,27 @@ function update(dt){
    if(sh.homing){
      const left=player.x-W/2,right=player.x+W/2,top=player.y-H/2,bottom=player.y+H/2;
      let target=null,best=Infinity;
-     for(const e of enemies){if(e.hp<=0||e.x<left||e.x>right||e.y<top||e.y>bottom)continue;const bossBonus=e.boss?-250:0,d=Math.hypot(e.x-sh.x,e.y-sh.y)+bossBonus;if(d<best){best=d;target=e}}
+     for(const e of queryEnemies(sh.x,sh.y,Math.max(W,H))){if(!isVisible(e))continue;const dx=e.x-sh.x,dy=e.y-sh.y,d=Math.hypot(dx,dy)+(e.boss?-250:0);if(d<best){best=d;target=e}}
      if(target){const tx=target.x-sh.x,ty=target.y-sh.y,l=Math.hypot(tx,ty)||1,spd=Math.max(300,Math.hypot(sh.vx,sh.vy));const desiredX=tx/l*spd,desiredY=ty/l*spd;const turn=Math.min(1,dt*9);sh.vx+=(desiredX-sh.vx)*turn;sh.vy+=(desiredY-sh.vy)*turn;}
    }else{
      if(sh.x<left||sh.x>right){sh.x=Math.max(left,Math.min(right,sh.x));sh.vx*=-1;}
      if(sh.y<top||sh.y>bottom){sh.y=Math.max(top,Math.min(bottom,sh.y));sh.vy*=-1;}
    }
-   for(const e of enemies){if(e.hp<=0)continue;const hitNow=Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r;if(hitNow){if(sh.homing){if(!sh.hitCooldowns)sh.hitCooldowns=new WeakMap();let cd=sh.hitCooldowns.get(e)||0;if(cd<=0){dealWeaponDamage(e,sh.damage,'drill','drill');sh.hitCooldowns.set(e,.1);}else sh.hitCooldowns.set(e,Math.max(0,cd-dt));}else if(!sh.hit.has(e)){sh.hit.add(e);dealWeaponDamage(e,sh.damage,'drill','drill');}}else if(sh.homing&&sh.hitCooldowns){let cd=sh.hitCooldowns.get(e);if(cd!=null)sh.hitCooldowns.set(e,Math.max(0,cd-dt));}}
+   for(const e of queryEnemies(sh.x,sh.y,sh.r+24)){const hitNow=Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r;if(hitNow){if(sh.homing){if(!sh.hitCooldowns)sh.hitCooldowns=new WeakMap();let cd=sh.hitCooldowns.get(e)||0;if(cd<=0){dealWeaponDamage(e,sh.damage,'drill','drill');sh.hitCooldowns.set(e,.1);}else sh.hitCooldowns.set(e,Math.max(0,cd-dt));}else if(!sh.hit.has(e)){sh.hit.add(e);dealWeaponDamage(e,sh.damage,'drill','drill');}}else if(sh.homing&&sh.hitCooldowns){let cd=sh.hitCooldowns.get(e);if(cd!=null)sh.hitCooldowns.set(e,Math.max(0,cd-dt));}}
   }else{
-   for(const e of enemies)if(e.hp>0&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r&&!sh.hit.has(e)){
+   for(const e of queryEnemies(sh.x,sh.y,sh.r+24))if(e.hp>0&&Math.hypot(sh.x-e.x,sh.y-e.y)<sh.r+e.r&&!sh.hit.has(e)){
      sh.hit.add(e);
      if(sh.rocket){rocketExplosion(sh);sh.life=0;break;}
      dealWeaponDamage(e,sh.damage,'kunai','gun');
      if(sh.basicGun&&sh.pierce>0){sh.pierce--;continue;}
      sh.life=0;break;
    }}
- }
- for(const a of areas){a.life-=dt;a.tick-=dt;if(a.tick<=0){a.tick=.4;for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'fire','fire');}}}
+ for(const a of areas){a.life-=dt;a.tick-=dt;if(a.tick<=0){a.tick=.4;for(const e of queryEnemies(a.x,a.y,a.r+24))if(e.hp>0&&Math.hypot(e.x-a.x,e.y-a.y)<a.r+e.r){dealWeaponDamage(e,a.damage,'fire','fire');}}}
  {const left=player.x-W/2-80,right=player.x+W/2+80,top=player.y-H/2-80,bottom=player.y+H/2+80;areas=areas.filter(a=>a.life>0&&a.x>=left&&a.x<=right&&a.y>=top&&a.y<=bottom);}
  weaponUpdate(dt);
  processLightning(dt);
- if(shots.length>120)shots=shots.filter((s,i)=>i<120);
- if(areaWarnings.length>40)areaWarnings=areaWarnings.slice(-40);
+ if(shots.length>90)shots=shots.filter((s,i)=>i<90);
+ if(areaWarnings.length>28)areaWarnings=areaWarnings.slice(-28);
  for(const e of enemies)if(e.hp<=0)kill(e);
  for(const g of gems){let dx=player.x-g.x,dy=player.y-g.y,d=Math.hypot(dx,dy)||1;const magnetRange=40*(1+stats.magnetPct);if(g.boost>0){g.boost-=dt*1000;g.x+=dx/d*420*dt;g.y+=dy/d*420*dt;}else if(d<magnetRange){const pull=260+Math.max(0,magnetRange-d)*4;g.x+=dx/d*pull*dt;g.y+=dy/d*pull*dt;}if(d<player.r+g.r){addXP(g.xp);g.r=0;}}
  for(const d of drops)d.bob+=dt;
