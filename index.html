@@ -211,7 +211,7 @@ function applyChoice(id){
   const w=weapons[id];
   if(w.lv>=w.max)return;
   w.lv++;
-  if(id==='kunai'){w.count=1;w.pierce=Math.max(0,w.lv-1);w.cooldown=w.lv>=5?.5:.43;}
+  if(id==='kunai'){w.count=1;w.pierce=Math.max(0,w.lv-1);w.cooldown=w.lv>=5?.3:.43;}
   if(id==='blades'){w.count=w.lv+2;w.active=w.lv>=5?Infinity:0;w.cool=0;}
   if(id==='lightning')w.count=w.lv;
   if(id==='rocket')w.count=(w.lv===1?1:w.lv===2?2:w.lv===3?2:w.lv===4?3:1);
@@ -448,8 +448,11 @@ function joyMove(e){let x=e.clientX-joy.bx,y=e.clientY-joy.by,d=Math.hypot(x,y),
 function begin(e){if(paused||over||e.target.closest('button,.overlay'))return;joy.on=true;joy.id=e.pointerId;joy.bx=e.clientX;joy.by=e.clientY;stick.style.left=e.clientX+'px';stick.style.top=e.clientY+'px';stick.style.display='block';joyMove(e)}
 function end(e){if(!joy.on||e.pointerId!==joy.id)return;joy.on=false;joy.x=joy.y=0;stick.style.display='none';knob.style.transform='translate(0,0)'}
 c.addEventListener('pointerdown',begin);c.addEventListener('pointermove',e=>joy.on&&e.pointerId===joy.id&&joyMove(e));c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);
-function startGame(){document.getElementById('mainMenu').style.display='none';document.getElementById('gameover').style.display='none';gameStarted=true;reset();last=performance.now();requestAnimationFrame(loop)}
-document.getElementById('startBtn').onclick=startGame;
+let startLock=false;
+function startGame(e){if(e)e.preventDefault();if(startLock||gameStarted)return;startLock=true;document.getElementById('mainMenu').style.display='none';document.getElementById('gameover').style.display='none';gameStarted=true;reset();last=performance.now();requestAnimationFrame(loop);setTimeout(()=>startLock=false,0)}
+const startButton=document.getElementById('startBtn');
+startButton.addEventListener('click',startGame);
+startButton.addEventListener('pointerup',startGame);
 document.getElementById('restart').onclick=()=>{document.getElementById('gameover').classList.remove('win');document.getElementById('gameover').style.display='none';document.getElementById('mainMenu').style.display='flex';gameStarted=false};
 document.getElementById('closeChest').onclick=()=>{chestPaused=false;document.getElementById('chestReward').style.display='none';paused=false;last=performance.now();requestAnimationFrame(loop)};
 document.getElementById('pauseBtn').onclick=()=>{if(over||document.getElementById('levelup').style.display==='flex'||chestPaused)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'Ⅱ';if(!paused){last=performance.now();requestAnimationFrame(loop)}};
