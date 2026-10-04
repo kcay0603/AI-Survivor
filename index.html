@@ -107,7 +107,7 @@ function reset(){
  score=0;level=1;xp=0;xpNeed=S.xpBase;time=0;spawnTimer=.4;shotTimer=.1;nextBoss=90;paused=false;over=false;won=false;last=performance.now();walkTime=0;killCount=0;
  for(const w of Object.values(weapons)){w.lv=0;w.evo=false;w.count=0;w.cool=0}
  for(const s of Object.values(supports))s.lv=0;
- stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0};
+ stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0,attackSpeedPct:0};
  healTimer=5;
  document.getElementById('gameover').style.display='none';document.getElementById('levelup').style.display='none';
 updateWeaponsUI();requestAnimationFrame(loop);
@@ -254,7 +254,7 @@ function update(dt){
  if(time>=540){time=540;if(!enemies.some(e=>e.boss&&e.bossIndex===4))boss(4);}
  else if(time>=nextBoss){boss(Math.floor(nextBoss/90)-1);nextBoss+=90;}
  spawnTimer-=dt;if(spawnTimer<=0){spawnEnemy();spawnTimer=Math.max(.10,.78-time*.0009-level*.006);}
- shotTimer-=dt;if(shotTimer<=0){fireGun();shotTimer=Math.max(.08,player.fireRate/(1+stats.attackSpeedPct));}
+ shotTimer-=dt;if(shotTimer<=0){fireGun();shotTimer=Math.max(.08,player.fireRate/(1+(stats.attackSpeedPct||0)));}
  const moving=joy.on&&(Math.abs(joy.x)+Math.abs(joy.y)>.04),len=Math.hypot(joy.x,joy.y)||1;
  if(moving){player.x+=joy.x/len*player.speed*(1+stats.movePct)*dt;player.y+=joy.y/len*player.speed*(1+stats.movePct)*dt;walkTime+=dt*9}else walkTime+=dt*2;
  player.inv=Math.max(0,player.inv-dt);
