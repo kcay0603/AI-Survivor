@@ -56,8 +56,9 @@ function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight
 const S={maxHp:100,damage:12,monsterHp:20,contact:10,xpBase:40};
 let player,enemies,shots,gems,drops,particles,texts,areaWarnings,areas,score,level,xp,xpNeed,time,spawnTimer,shotTimer,nextBoss,paused,over,won,last,walkTime,killCount;
 const joy={on:false,id:null,bx:0,by:0,x:0,y:0};
+let lightningSeq=[];
 const weapons={
- kunai:{name:'쿠나이',lv:1,max:5,evo:false,count:1,damage:20,range:350,cooldown:.43,cool:0,pierce:0},
+ kunai:{name:'쿠나이',lv:1,max:5,evo:false,count:1,damage:20,range:350,cooldown:.43,cool:0,pierce:0,baseDamage:20},
  blades:{name:'수호자',lv:0,max:5,evo:false,count:0,damage:35,range:100,duration:5,cooldown:3,cool:0,phase:0},
  lightning:{name:'번개 발사기',lv:0,max:5,evo:false,count:0,damage:68,range:300,cooldown:4,cool:0},
  rocket:{name:'로켓',lv:0,max:5,evo:false,count:0,damage:46,range:300,cooldown:3.5,cool:0},
@@ -109,6 +110,7 @@ function reset(){
  for(const w of Object.values(weapons)){w.lv=w===weapons.kunai?1:0;w.evo=false;w.count=w===weapons.kunai?1:0;w.cool=0;w.pierce=w===weapons.kunai?0:undefined}
  for(const s of Object.values(supports))s.lv=0;
  stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0,attackSpeedPct:0};
+ lightningSeq=[];
  healTimer=5;
  document.getElementById('gameover').style.display='none';document.getElementById('levelup').style.display='none';
 updateWeaponsUI();requestAnimationFrame(loop);
@@ -133,7 +135,7 @@ function fireGun(){
  player.aimX=dx/l;player.aimY=dy/l;
  const speed=player.bulletSpeed*(1+stats.projectileSpeedPct);
  const size=w.lv>=5?1.25:1;
- shots.push({x:player.x+player.aimX*17,y:player.y+player.aimY*17,vx:player.aimX*speed,vy:player.aimY*speed,r:4*size,life:baseRange/speed,damage:w.damage*(1+stats.damagePct)*(w.lv>=3?1:1),basicGun:true,pierce:Math.max(0,w.lv-1),hit:new Set()});
+ shots.push({x:player.x+player.aimX*17,y:player.y+player.aimY*17,vx:player.aimX*speed,vy:player.aimY*speed,r:4*size,life:baseRange/speed,damage:w.baseDamage*(1+stats.damagePct),basicGun:true,pierce:Math.max(0,w.lv-1),hit:new Set()});
 }
 
 function addText(x,y,n){texts.push({x,y,n,age:0})}
@@ -252,7 +254,7 @@ function weaponUpdate(dt){
  if(l.lv&&l.cool<=0&&lightningSeq.length===0)startLightningSequence();
  // 로켓
  const r=weapons.rocket;
- if(r.lv&&r.cool<=0){for(let i=0;i<r.count;i++)fireRocket(r);r.cool=r.cooldown*(1-0.08*supports.cube.lv);}
+ if(r.lv&&r.cool<=0){for(let i=0;i<r.count;i++)fireRocket(r,i,r.count);r.cool=r.cooldown*(1-0.08*supports.cube.lv);}
  // 화염병
  const f=weapons.fire;
  if(f.lv&&f.cool<=0){for(let i=0;i<f.count;i++)throwFire(f);f.cool=f.cooldown*(1-0.08*supports.cube.lv);}
@@ -279,7 +281,7 @@ function processLightning(dt){
 }
 
 function nearestEnemy(maxRange=Infinity){let t=null,b=Infinity;for(const e of enemies){if(e.hp<=0)continue;const d=Math.hypot(e.x-player.x,e.y-player.y);if(d<=maxRange&&d<b){b=d;t=e}}return t}
-function fireRocket(w){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const a=Math.atan2(t.y-player.y,t.x-player.x),spd=250*(1+stats.projectileSpeedPct),giant=w.lv>=5;shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:giant?11:6,life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct)*(w.lv>=3&&w.lv<5?1.1:1),rocket:true,giant});}
+function fireRocket(w,index=0,total=1){const t=nearestEnemy(w.range*(1+stats.weaponRangePct));if(!t)return;const base=Math.atan2(t.y-player.y,t.x-player.x);const spread=total>1?0.16:0;const a=base+(index-(total-1)/2)*spread;const spd=250*(1+stats.projectileSpeedPct),giant=w.lv>=5;shots.push({x:player.x+Math.cos(a)*14,y:player.y+Math.sin(a)*14,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:giant?14:6,life:Math.max(1,w.range/spd),damage:w.damage*(1+stats.damagePct)*(w.lv>=3&&w.lv<5?1.1:1),rocket:true,giant});}
 function rocketExplosion(s){const r=(s.giant?58:40)*(1+stats.weaponRangePct)*(1+stats.weaponSizePct);burst(s.x,s.y,s.giant?28:16);for(const e of enemies)if(e.hp>0&&Math.hypot(e.x-s.x,e.y-s.y)<r+e.r){e.hp-=s.damage;addText(e.x,e.y-e.r,s.damage.toFixed(0));if(e.hp<=0)kill(e,'rocket');}}
 function lightning(){startLightningSequence();}
 
@@ -371,7 +373,10 @@ function draw(){
  for(const a of areaWarnings){ctx.globalAlpha=.24;ctx.fillStyle=a.lightning?'#8ed8ff':'#ff4455';ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,6.283);ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=a.lightning?'#e8f8ff':'#ff6677';ctx.lineWidth=2;ctx.stroke();if(a.lightning){ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(a.x-5,a.y-75);ctx.lineTo(a.x+5,a.y-45);ctx.lineTo(a.x-4,a.y-22);ctx.lineTo(a.x+4,a.y);ctx.stroke();}}
  for(const g of gems){const col=g.xp>=70?'#ff3b30':g.xp>=40?'#ff8a24':g.xp>=20?'#ffd52a':'#62d9ff';ctx.save();ctx.translate(g.x,g.y);ctx.rotate(.785);ctx.fillStyle=col;ctx.fillRect(-5,-5,10,10);ctx.restore();}
  for(const d of drops){const yy=d.y+Math.sin(d.bob)*2;ctx.save();ctx.translate(d.x,yy);if(d.type==='bomb'){ctx.fillStyle='#e33d45';ctx.beginPath();ctx.arc(0,2,10,0,6.283);ctx.fill();ctx.fillStyle='#222';ctx.fillRect(-2,-11,4,5);ctx.fillStyle='#ffd34e';ctx.fillRect(2,-14,6,3);}else if(d.type==='magnet'){ctx.strokeStyle='#4b8dff';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,9,0,Math.PI);ctx.stroke();ctx.fillStyle='#ef4444';ctx.fillRect(-11,-2,5,9);ctx.fillRect(6,-2,5,9);}else{ctx.fillStyle='#fff';ctx.fillRect(-9,-9,18,18);ctx.fillStyle='#e33d45';ctx.fillRect(-2,-8,4,16);ctx.fillRect(-8,-2,16,4);}ctx.restore();}
- if(weapons.blades.lv){const w=weapons.blades,active=w.duration*(1+supports.exo.lv*.10),cycle=active+w.cooldown,phase=time%cycle;if(phase<active){const rad=w.range*(1+stats.weaponRangePct),ang=time*2.8,br=9*(1+stats.weaponSizePct);for(let i=0;i<w.count;i++){const a=ang+i*6.283185/w.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad;ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillStyle=w.evo?'#ffdf4d':'#f4f7ff';ctx.strokeStyle='#20242a';ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<8;k++){const aa=k*Math.PI/4+(k%2)*.18,rr=k%2?br*.55:br;const px=Math.cos(aa)*rr,py=Math.sin(aa)*rr;k?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}}}
+ if(weapons.blades.lv){const w=weapons.blades,active=w.duration*(1+supports.exo.lv*.10),cycle=active+w.cooldown,phase=time%cycle;if(w.lv>=5||phase<active){const rad=w.range*(1+stats.weaponRangePct),ang=time*2.8,br=11*(1+stats.weaponSizePct);for(let i=0;i<w.count;i++){const a=ang+i*6.283185/w.count,x=player.x+Math.cos(a)*rad,y=player.y+Math.sin(a)*rad;ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillStyle=w.evo?'#ffdf4d':'#f4f7ff';ctx.strokeStyle='#20242a';ctx.lineWidth=2;
+ctx.beginPath();ctx.arc(0,0,br*.72,0,Math.PI*2);ctx.fill();ctx.stroke();
+for(let k=0;k<4;k++){const aa=k*Math.PI/2;ctx.save();ctx.rotate(aa);ctx.beginPath();ctx.moveTo(br*.35,-br*.42);ctx.lineTo(br*1.15,0);ctx.lineTo(br*.35,br*.42);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+ctx.fillStyle='#20242a';ctx.beginPath();ctx.arc(0,0,br*.16,0,Math.PI*2);ctx.fill();ctx.restore();}}}
  for(const e of enemies)if(!e.dead)drawEnemy(e);
  for(const sh of shots){if(sh.fireBottle){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#45c95a';ctx.strokeStyle='#17351d';ctx.lineWidth=2;ctx.fillRect(-5,-9,10,18);ctx.fillStyle='#a7e89b';ctx.fillRect(-3,-13,6,4);ctx.restore();}else if(sh.rocket){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle=sh.giant?'#ff3b30':'#ff7b21';ctx.beginPath();ctx.moveTo(sh.giant?17:11,0);ctx.lineTo(-8,-5);ctx.lineTo(-5,0);ctx.lineTo(-8,5);ctx.closePath();ctx.fill();ctx.fillStyle='#ffd34e';ctx.fillRect(-12,-2,5,4);ctx.restore();}else if(sh.drill){ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(Math.atan2(sh.vy,sh.vx));ctx.fillStyle='#c7d0d9';ctx.strokeStyle='#20242a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-9,-7);ctx.lineTo(-4,0);ctx.lineTo(-9,7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}else{ctx.fillStyle='#f2c14e';ctx.fillRect(sh.x-4,sh.y-2,8,4);}}
  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/.4);ctx.fillStyle='#f2c14e';ctx.fillRect(p.x-2,p.y-2,4,4);}ctx.globalAlpha=1;for(const t of texts){ctx.globalAlpha=Math.max(0,1-t.age/.8);ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(t.n,t.x,t.y);}ctx.globalAlpha=1;drawPlayer();ctx.restore();
