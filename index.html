@@ -60,7 +60,7 @@ let W,H,DPR;
 function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;c.style.width=W+'px';c.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',resize);resize();
 
 const S={maxHp:100,damage:12,monsterHp:20,contact:10,xpBase:40};
-let player,enemies,shots,gems,drops,particles,texts,areaWarnings,areas,score,level,xp,xpNeed,time,animTime,spawnTimer,shotTimer,nextBoss,paused,over,won,last,walkTime,killCount,chestPaused,finalBossDefeated,gameStarted;
+let player=null,enemies=[],shots=[],gems=[],drops=[],particles=[],texts=[],areaWarnings=[],areas=[],score=0,level=1,xp=0,xpNeed=S.xpBase,time=0,animTime=0,spawnTimer=0,shotTimer=0,nextBoss=90,paused=true,over=false,won=false,last=0,walkTime=0,killCount=0,chestPaused=false,finalBossDefeated=false,gameStarted=false;
 const joy={on:false,id:null,bx:0,by:0,x:0,y:0};
 let lightningSeq=[];
 let enemyGrid=new Map();
@@ -488,7 +488,7 @@ document.getElementById('restart').onclick=()=>{
 };
 document.getElementById('closeChest').onclick=()=>{chestPaused=false;document.getElementById('chestReward').style.display='none';paused=false;last=performance.now();if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop)};
 document.getElementById('pauseBtn').onclick=()=>{if(over||document.getElementById('levelup').style.display==='flex'||chestPaused)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'Ⅱ';if(!paused){last=performance.now();if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop)}};
-startGame();
+setTimeout(startGame,0);
 </script>
 </body>
 </html>
