@@ -76,7 +76,7 @@ const supports={
  fitness:{name:'피트니스 안내서',lv:0,max:5,desc:'최대 HP +20%, 증가분 회복'},
  magnet:{name:'탄력 자석',lv:0,max:3,desc:'아이템 획득 범위 +100%'}
 };
-let stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0};
+let stats={damagePct:0,weaponRangePct:0,weaponSizePct:0,xpPct:0,damageReducePct:0,movePct:0,projectileSpeedPct:0,magnetPct:0,attackSpeedPct:0};
 let healTimer=5;
 
 const types=[
@@ -123,9 +123,18 @@ function boss(kind){
  enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,r:25+k*2,hp,max:hp,speed:28+k*5,type:'boss'+k,contact:S.contact*2.2,xp:35+k*8,phase:0,boss:true,bossIndex:k,name:names[k],attackCd:2.5});
 }
 function fireGun(){
- let t=null,b=Infinity;for(const e of enemies){if(e.hp<=0)continue;let d=(e.x-player.x)**2+(e.y-player.y)**2;if(d<b){b=d;t=e}}
- if(!t)return;let dx=t.x-player.x,dy=t.y-player.y,l=Math.hypot(dx,dy)||1;player.aimX=dx/l;player.aimY=dy/l;
- shots.push({x:player.x+player.aimX*17,y:player.y+player.aimY*17,vx:player.aimX*player.bulletSpeed,vy:player.aimY*player.bulletSpeed,r:4,life:1.3,damage:player.damage*(1+stats.damagePct)});
+ const baseRange=350;
+ let t=null,b=baseRange*baseRange;
+ for(const e of enemies){
+  if(e.hp<=0)continue;
+  const d=(e.x-player.x)**2+(e.y-player.y)**2;
+  if(d<=b){b=d;t=e}
+ }
+ if(!t)return;
+ const dx=t.x-player.x,dy=t.y-player.y,l=Math.hypot(dx,dy)||1;
+ player.aimX=dx/l;player.aimY=dy/l;
+ const speed=player.bulletSpeed*(1+stats.projectileSpeedPct);
+ shots.push({x:player.x+player.aimX*17,y:player.y+player.aimY*17,vx:player.aimX*speed,vy:player.aimY*speed,r:4,life:baseRange/speed,damage:player.damage*(1+stats.damagePct),basicGun:true});
 }
 function addText(x,y,n){texts.push({x,y,n,age:0})}
 function burst(x,y,n=6){for(let i=0;i<n;i++){let a=Math.random()*6.28,s=25+Math.random()*90;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.4})}}
